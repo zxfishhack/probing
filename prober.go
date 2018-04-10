@@ -14,6 +14,7 @@ var (
 )
 
 type Prober interface {
+	SetModify(modify func(r *http.Request))
 	AddHTTP(id string, probingInterval time.Duration, endpoints []string) error
 	Remove(id string) error
 	RemoveAll()
@@ -25,6 +26,7 @@ type prober struct {
 	mu      sync.Mutex
 	targets map[string]*status
 	tr      http.RoundTripper
+	modify  func(r *http.Request)
 }
 
 func NewProber(tr http.RoundTripper) Prober {
@@ -35,6 +37,10 @@ func NewProber(tr http.RoundTripper) Prober {
 		p.tr = tr
 	}
 	return p
+}
+
+func (p *prober) SetModify(modify func(r *http.Request)) {
+	p.modify = modify
 }
 
 func (p *prober) AddHTTP(id string, probingInterval time.Duration, endpoints []string) error {
@@ -58,6 +64,9 @@ func (p *prober) AddHTTP(id string, probingInterval time.Duration, endpoints []s
 				req, err := http.NewRequest("GET", endpoints[pinned], nil)
 				if err != nil {
 					panic(err)
+				}
+				if p.modify != nil {
+					p.modify(req)
 				}
 				resp, err := p.tr.RoundTrip(req)
 				if err != nil {
